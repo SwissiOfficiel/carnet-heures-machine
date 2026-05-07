@@ -152,7 +152,7 @@ input[readonly]:focus{box-shadow:none;border-color:var(--border);}
       <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
           <label>📅 Date</label>
-          <input type="date" id="inp-date">
+          <input type="date" id="inp-date" onchange="saveDraft()">
         </div>
         <div class="form-group">
           <label>🕐 Heure</label>
@@ -162,12 +162,12 @@ input[readonly]:focus{box-shadow:none;border-color:var(--border);}
       <div class="form-grid three" style="margin-bottom:18px">
         <div class="form-group">
           <label>⬇ Début (h)</label>
-          <input type="number" id="inp-start" step="0.1" min="0" placeholder="0.0" oninput="calcTotal()">
+          <input type="number" id="inp-start" step="0.1" min="0" placeholder="0.0" oninput="calcTotal();saveDraft()">
           <div class="hint" id="hint-start"></div>
         </div>
         <div class="form-group">
           <label>⬆ Fin (h)</label>
-          <input type="number" id="inp-end" step="0.1" min="0" placeholder="0.0" oninput="calcTotal()">
+          <input type="number" id="inp-end" step="0.1" min="0" placeholder="0.0" oninput="calcTotal();saveDraft()">
         </div>
         <div class="form-group">
           <label>⏱ Total</label>
@@ -178,7 +178,7 @@ input[readonly]:focus{box-shadow:none;border-color:var(--border);}
       <div style="margin-bottom:14px">
         <div class="section-label">📍 Chantier / Destination</div>
         <div class="chantier-pills" id="chantier-pills"></div>
-        <input type="text" id="inp-chantier" placeholder="Nom du client ou chantier libre..." oninput="onChantierInput()">
+        <input type="text" id="inp-chantier" placeholder="Nom du client ou chantier libre..." oninput="onChantierInput();saveDraft()">
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveEntry()">✓ Enregistrer</button>
@@ -252,24 +252,53 @@ if("serviceWorker" in navigator){
     .catch(e=>console.log("SW erreur",e));
 }
 
+const DK="risse_draft_v1";
+function saveDraft(){
+  const draft={
+    start:document.getElementById("inp-start").value,
+    end:document.getElementById("inp-end").value,
+    chantier:document.getElementById("inp-chantier").value,
+    date:document.getElementById("inp-date").value,
+    selCh:selCh,
+    cidx:cidx
+  };
+  localStorage.setItem(DK,JSON.stringify(draft));
+}
+function loadDraft(){
+  const s=localStorage.getItem(DK);
+  if(!s)return false;
+  const d=JSON.parse(s);
+  if(d.cidx!==undefined){cidx=d.cidx;}
+  if(d.date)document.getElementById("inp-date").value=d.date;
+  if(d.start!=="")document.getElementById("inp-start").value=d.start;
+  if(d.end!=="")document.getElementById("inp-end").value=d.end;
+  if(d.chantier)document.getElementById("inp-chantier").value=d.chantier;
+  if(d.selCh){
+    selCh=d.selCh;
+    // pills will be updated in initPills
+  }
+  if(d.start!==""||d.end!=="")calcTotal();
+  return true;
+}
+function clearDraft(){localStorage.removeItem(DK);}
 function getMachines(){const s=localStorage.getItem(MK);return s?JSON.parse(s):[{name:"Mecalac MWR7",type:"Pelle sur roues",def:true}];}
 function saveMachines(m){localStorage.setItem(MK,JSON.stringify(m));}
 function getEntries(){const s=localStorage.getItem(SK);if(!s)return[];let e=JSON.parse(s);const c=new Date();c.setDate(c.getDate()-30);e=e.filter(x=>new Date(x.date)>=c);localStorage.setItem(SK,JSON.stringify(e));return e;}
 function saveEntries(e){localStorage.setItem(SK,JSON.stringify(e));}
 
-window.onload=function(){initTabs();initPills();setToday();updateTime();setInterval(updateTime,30000);prefill();renderRapport();renderMachines();};
+window.onload=function(){initTabs();const hasDraft=loadDraft();initPills();updateTime();setInterval(updateTime,30000);if(!hasDraft)prefill();initTabs();renderRapport();renderMachines();};
 function setToday(){document.getElementById("inp-date").value=new Date().toISOString().split("T")[0];}
 function updateTime(){const d=new Date();document.getElementById("inp-time").value=d.toLocaleTimeString("fr-CH",{hour:"2-digit",minute:"2-digit"})+" — "+d.toLocaleDateString("fr-CH",{weekday:"long",day:"numeric",month:"long"});}
 function initTabs(){const m=getMachines(),c=document.getElementById("machine-tabs");c.innerHTML="";m.forEach((mac,i)=>{const b=document.createElement("button");b.className="machine-tab"+(i===cidx?" active":"");b.textContent=mac.name;b.onclick=()=>selMach(i);c.appendChild(b);});updMach();}
-function selMach(i){cidx=i;document.querySelectorAll(".machine-tab").forEach((b,j)=>b.classList.toggle("active",j===i));updMach();prefill();}
+function selMach(i){cidx=i;document.querySelectorAll(".machine-tab").forEach((b,j)=>b.classList.toggle("active",j===i));updMach();prefill();saveDraft();}
 function updMach(){const m=getMachines()[cidx];document.getElementById("form-machine-name").textContent=m.name;document.getElementById("form-machine-badge").textContent=m.type||"Machine";}
 function initPills(){const c=document.getElementById("chantier-pills");c.innerHTML="";CHANTIERS.forEach(ch=>{const b=document.createElement("button");b.className="pill"+(selCh===ch?" active":"");b.textContent=ch;b.type="button";b.onclick=()=>selChantier(ch,b);c.appendChild(b);});}
-function selChantier(ch,btn){selCh=(selCh===ch)?"":ch;document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));if(selCh){btn.classList.add("active");document.getElementById("inp-chantier").value="";}}
+function selChantier(ch,btn){selCh=(selCh===ch)?"":ch;document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));if(selCh){btn.classList.add("active");document.getElementById("inp-chantier").value="";}saveDraft();}
 function onChantierInput(){selCh="";document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));}
 function prefill(){const m=getMachines()[cidx].name;const entries=getEntries().filter(e=>e.machine===m);const h=document.getElementById("hint-start");if(entries.length){entries.sort((a,b)=>a.date!==b.date?b.date.localeCompare(a.date):b.savedAt-a.savedAt);const last=entries[0];document.getElementById("inp-start").value=last.end;h.textContent="Derniere fin : "+last.end+" h ("+fd(last.date)+")";}else{document.getElementById("inp-start").value="";h.textContent="";}}
 function calcTotal(){const s=parseFloat(document.getElementById("inp-start").value),e=parseFloat(document.getElementById("inp-end").value),d=document.getElementById("total-display");d.className="total-display";if(!isNaN(s)&&!isNaN(e)&&e>s){d.textContent=(e-s).toFixed(1)+" h";}else if(!isNaN(s)&&!isNaN(e)&&document.getElementById("inp-end").value!==""){d.textContent="Erreur";d.className="total-display error";}else d.textContent="—";}
-function saveEntry(){const m=getMachines()[cidx].name,date=document.getElementById("inp-date").value,start=parseFloat(document.getElementById("inp-start").value),end=parseFloat(document.getElementById("inp-end").value),cf=document.getElementById("inp-chantier").value.trim(),ch=selCh||cf;if(!date){toast("Selectionner une date");return;}if(isNaN(start)){toast("Entrer heure debut");return;}if(isNaN(end)){toast("Entrer heure fin");return;}if(end<=start){toast("Fin doit etre > debut");return;}if(!ch){toast("Selectionner un chantier");return;}const total=parseFloat((end-start).toFixed(2)),entries=getEntries();entries.push({id:Date.now(),machine:m,date,start,end,total,chantier:ch,savedAt:Date.now()});saveEntries(entries);toast("Entree enregistree — "+total+" h");document.getElementById("inp-start").value=end;document.getElementById("inp-end").value="";document.getElementById("inp-chantier").value="";selCh="";document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));document.getElementById("total-display").textContent="—";document.getElementById("hint-start").textContent="Derniere fin : "+end+" h";renderRapport();}
-function resetForm(){["inp-start","inp-end","inp-chantier"].forEach(id=>document.getElementById(id).value="");selCh="";document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));const d=document.getElementById("total-display");d.textContent="—";d.className="total-display";document.getElementById("hint-start").textContent="";setToday();}
+function saveEntry(){const m=getMachines()[cidx].name,date=document.getElementById("inp-date").value,start=parseFloat(document.getElementById("inp-start").value),end=parseFloat(document.getElementById("inp-end").value),cf=document.getElementById("inp-chantier").value.trim(),ch=selCh||cf;if(!date){toast("Selectionner une date");return;}if(isNaN(start)){toast("Entrer heure debut");return;}if(isNaN(end)){toast("Entrer heure fin");return;}if(end<=start){toast("Fin doit etre > debut");return;}if(!ch){toast("Selectionner un chantier");return;}const total=parseFloat((end-start).toFixed(2)),entries=getEntries();entries.push({id:Date.now(),machine:m,date,start,end,total,chantier:ch,savedAt:Date.now()});saveEntries(entries);toast("Entree enregistree — "+total+" h");document.getElementById("inp-start").value=end;document.getElementById("inp-end").value="";document.getElementById("inp-chantier").value="";selCh="";document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));document.getElementById("total-display").textContent="—";document.getElementById("hint-start").textContent="Derniere fin : "+end+" h";clearDraft();renderRapport();}
+function resetForm(){["inp-start","inp-end","inp-chantier"].forEach(id=>document.getElementById(id).value="");selCh="";document.querySelectorAll(".pill").forEach(b=>b.classList.remove("active"));const d=document.getElementById("total-display");d.textContent="—";d.className="total-display";document.getElementById("hint-start").textContent="";setToday();clearDraft();}
 function renderRapport(){const entries=getEntries(),sb=document.getElementById("stats-bar"),rl=document.getElementById("rapport-list");if(!entries.length){sb.innerHTML="";rl.innerHTML="<div class='empty'><div class='empty-icon'>&#x1F4CB;</div><div class='empty-text'>Aucune entree pour les 30 derniers jours.</div></div>";return;}const totalH=entries.reduce((s,e)=>s+e.total,0),days=new Set(entries.map(e=>e.date)).size;sb.innerHTML="<div class='stat-box'><div class='stat-label'>Heures totales</div><div class='stat-value'>"+totalH.toFixed(1)+"<span class='stat-unit'>h</span></div></div><div class='stat-box'><div class='stat-label'>Jours actifs</div><div class='stat-value'>"+days+"<span class='stat-unit'>j</span></div></div><div class='stat-box'><div class='stat-label'>Entrees</div><div class='stat-value'>"+entries.length+"<span class='stat-unit'>x</span></div></div>";const byDate={};entries.forEach(e=>{if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);});const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));rl.innerHTML=dates.map(date=>{const day=byDate[date].sort((a,b)=>a.savedAt-b.savedAt),dayT=day.reduce((s,e)=>s+e.total,0);return "<div class='date-group'><div class='date-group-header'><span>"+fdl(date)+"</span><span class='date-total'>Total : "+dayT.toFixed(1)+" h</span></div><div class='entries-wrapper'>"+day.map(e=>"<div class='entry-row'><span class='entry-machine'>"+e.machine+"</span><div><div class='entry-chantier'>"+e.chantier+"</div><div class='entry-sub'>"+e.start+" h &rarr; "+e.end+" h</div></div><div class='entry-hours'>"+e.start+"&rarr;"+e.end+"h</div><div class='entry-total'>"+e.total.toFixed(1)+" h</div><div><button class='btn btn-danger' onclick='delEntry("+e.id+")'>x</button></div></div>").join("")+"</div></div>";}).join("");}
 function delEntry(id){if(!confirm("Supprimer cette entree ?"))return;saveEntries(getEntries().filter(e=>e.id!==id));renderRapport();toast("Entree supprimee");}
 function renderMachines(){const m=getMachines();document.getElementById("machines-list").innerHTML=m.map((mac,i)=>"<div class='machine-row'><div class='machine-icon'>&#x1F69C;</div><div style='flex:1'><div class='machine-name'>"+mac.name+"</div><div class='machine-type-label'>"+(mac.type||"")+"</div></div>"+(mac.def?"<span class='default-badge'>&#x2605; Defaut</span>":"<button class='btn btn-danger btn-sm' onclick='removeMach("+i+")'>Supprimer</button>")+"</div>").join("");}
